@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { GuestHeading, GuestShell } from "@/components/guest-shell";
 import { Card, EmptyState, ErrorCard, Loading } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import { useAsync, useEvent, useGuestSession, useRealtime, useRepo } from "@/lib/hooks";
+import { useEvent, useGuestSession, useRealtime, useRepo } from "@/lib/hooks";
 import type { AlbumItemRow, PostWithDemoAssets } from "@/lib/types";
 
 /** G-07 アルバム一覧 / G-08 アルバム閲覧と拡大 */
@@ -17,20 +17,43 @@ export default function GuestAlbumPage() {
   const { session } = useGuestSession(slug);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [onlyMine, setOnlyMine] = useState(false);
+  const debug = typeof window !== "undefined" && window.location.search.includes("debug=1");
 
-  const loader = useCallback(async () => {
-    if (!event) return [] as PostWithDemoAssets[];
-    const rows = await repo.listPosts(event.id, { statuses: ["approved"] });
-    // 画像を持たない投稿はアルバムに載せない
-    return rows.filter((p) => p.assets.length > 0);
-  }, [repo, event]);
+  const [posts, setPosts] = useState<PostWithDemoAssets[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const [dbg, setDbg] = useState("");
 
-  const { data: posts, loading, error, reload } = useAsync<PostWithDemoAssets[]>(
-    loader,
-    [event?.id],
-    [],
-  );
-  useRealtime(event?.id, () => void reload());
+  // 投稿の読み込み。
+  // イベントが読めるまでは「読み込み中」のまま待ち、
+  // 取得が完了して初めて loading を false にする。
+  // （空のまま確定して「写真がありません」と誤表示するのを防ぐ）
+  useEffect(() => {
+    if (!event) return;
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    void (async () => {
+      try {
+        const rows = await repo.listPosts(event.id, { statuses: ["approved"] });
+        if (!alive) return;
+        setDbg(`rows=${rows.length} assets=${rows.map((r) => r.assets.length).join("/")}`);
+        setPosts(rows.filter((p) => p.assets.length > 0));
+      } catch (e) {
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : "読み込みに失敗しました");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [repo, event, nonce]);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  useRealtime(event?.id, reload);
 
   const visible = onlyMine && session
     ? posts.filter((p) => p.guest_id === session.guestId)
@@ -73,6 +96,11 @@ export default function GuestAlbumPage() {
         description={`${flat.length}枚 ・ 新しい順に並んでいます`}
       />
 
+      {debug ? (
+        <pre style={{ fontSize: "10px", whiteSpace: "pre-wrap", background: "#ff0", color: "#000", padding: "4px" }}>
+          {JSON.stringify({ evLoading: eventLoading, loading, error, eventId: event?.id ?? null, postsN: posts.length, flatN: flat.length, dbg })}
+        </pre>
+      ) : null}
       <div className="mb-4 flex items-center gap-2">
         <button
           type="button"

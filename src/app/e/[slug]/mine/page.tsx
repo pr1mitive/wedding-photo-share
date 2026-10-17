@@ -1,11 +1,11 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GuestHeading, GuestShell } from "@/components/guest-shell";
 import { Card, EmptyState, ErrorCard, Loading, StatusChip, Toast, useToast } from "@/components/ui";
 import { formatDateTime, formatBytes } from "@/lib/format";
-import { useAsync, useEvent, useGuestSession, useRepo } from "@/lib/hooks";
+import { useEvent, useGuestSession, useRepo } from "@/lib/hooks";
 import type { PostWithDemoAssets } from "@/lib/types";
 
 /** G-06 自分の投稿 */
@@ -18,19 +18,40 @@ export default function GuestMinePage() {
   const { toast, show } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loader = useCallback(async () => {
-    if (!event || !session) return [];
-    const rows = await repo.listPosts(event.id, { deviceToken: session.deviceToken });
-    // 画像を持たない投稿は表示しない。
-    // （過去の二重登録で生まれた「白紙の投稿」を画面から排除する）
-    return rows.filter((p) => p.assets.length > 0);
-  }, [repo, event, session]);
+  const [posts, setPosts] = useState<PostWithDemoAssets[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
 
-  const { data: posts, loading, error, reload } = useAsync<PostWithDemoAssets[]>(
-    loader,
-    [event?.id, session?.deviceToken],
-    [],
-  );
+  // 自分の投稿の読み込み。
+  // イベントと端末セッションが揃うまで待ってから取得し、
+  // 取得完了まで loading を下げない。
+  useEffect(() => {
+    if (!event) return;
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    void (async () => {
+      try {
+        const rows = await repo.listPosts(
+          event.id,
+          session ? { deviceToken: session.deviceToken } : {},
+        );
+        if (!alive) return;
+        setPosts(rows.filter((p) => p.assets.length > 0));
+      } catch (e) {
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : "読み込みに失敗しました");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [repo, event, session, nonce]);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   async function requestDelete(post: PostWithDemoAssets) {
     if (!event || !session) return;
