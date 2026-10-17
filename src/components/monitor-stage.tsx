@@ -10,7 +10,7 @@ import type { EventRow, PostWithDemoAssets } from "@/lib/types";
    上下左右5%セーフエリア、投稿者名4.5vh、コメント3.2vh。
    ============================================================ */
 
-export type StageMode = "idle" | "large" | "background";
+export type StageMode = "idle" | "large" | "background" | "mosaic";
 
 export function MonitorStage({
   mode,
@@ -18,6 +18,8 @@ export function MonitorStage({
   current,
   zoomed,
   backgroundPool,
+  wallPool,
+  announce,
   settings,
   clock,
 }: {
@@ -26,7 +28,16 @@ export function MonitorStage({
   current: PostWithDemoAssets | null;
   zoomed: boolean;
   backgroundPool: PostWithDemoAssets[];
-  settings: { show_nickname: boolean; show_comment: boolean; safe_area_percent: number };
+  /** 写真の壁に流す写真（新着は前景に出るため除かれる） */
+  wallPool: PostWithDemoAssets[];
+  /** 新着投稿のお知らせ（数秒だけ表示） */
+  announce: string | null;
+  settings: {
+    show_nickname: boolean;
+    show_comment: boolean;
+    safe_area_percent: number;
+    background_seconds: number;
+  };
   clock: Date;
 }) {
   const safeInset = `${settings.safe_area_percent}%`;
@@ -34,17 +45,43 @@ export function MonitorStage({
 
   useEffect(() => {
     if (mode !== "background" || backgroundPool.length === 0) return;
+    // 切替間隔は管理画面の設定（background_seconds）に従う。
+    // 以前は 8000ms 固定で、設定を変えても反映されなかった。
     const timer = setInterval(
       () => setBgIndex((i) => (i + 1) % backgroundPool.length),
-      8000,
+      Math.max(settings.background_seconds, 2) * 1000,
     );
     return () => clearInterval(timer);
-  }, [mode, backgroundPool.length]);
+  }, [mode, backgroundPool.length, settings.background_seconds]);
 
   const bgPost = useMemo(
     () => backgroundPool[bgIndex] ?? backgroundPool[0] ?? null,
     [backgroundPool, bgIndex],
   );
+
+  /* 写真の壁：3列に振り分け、継ぎ目のないループのため各列を2回繰り返す。
+     並びは写真の集合が変わったときだけ作り直す。3秒ごとの再取得のたびに
+     並びが変わると、壁がちらついて落ち着かないため。 */
+  const wallColumns = useMemo(() => {
+    const pool = wallPool.filter(
+      (p) => p.id !== current?.id && p.assets[0]?.thumbUrl,
+    );
+    if (pool.length < 3) return [] as PostWithDemoAssets[][];
+    const sorted = [...pool].sort((a, b) => (a.id < b.id ? -1 : 1));
+    const cols: PostWithDemoAssets[][] = [[], [], []];
+    sorted.forEach((p, i) => cols[i % 3].push(p));
+    // 1列分の高さが画面より低いと、流れる途中で隙間ができる。
+    // 写真が少ないうちは同じ写真を繰り返して埋め、継ぎ目を出さない。
+    const MIN_PER_SET = 6;
+    return cols.map((c) => {
+      if (c.length === 0) return [];
+      const filled: PostWithDemoAssets[] = [];
+      while (filled.length < MIN_PER_SET) filled.push(...c);
+      return [...filled, ...filled];
+    });
+  }, [wallPool, current?.id]);
+
+  const wallDurations = ["180s", "225s", "150s"];
 
   const clockText = `${String(clock.getHours()).padStart(2, "0")}:${String(
     clock.getMinutes(),
@@ -120,6 +157,7 @@ export function MonitorStage({
             src={bgPost.assets[0].url}
             alt=""
             className="absolute inset-0 size-full object-cover animate-kenburns"
+            style={{ animationDuration: `${settings.background_seconds}s` }}
           />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/45 to-black/25" />
@@ -177,6 +215,105 @@ export function MonitorStage({
             />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  /* ---- ライブ表示：新着1枚を大きく＋過去の写真が背景で流れ続ける ---- */
+  if (mode === "mosaic") {
+    const featuredAsset = current?.assets[0];
+    return (
+      <div className="monitor-root">
+        {/* 背景：過去写真の壁。列ごとに速度と向きを変えて流し続ける */}
+        <div className="absolute inset-0 flex gap-[0.5%] opacity-[0.40]" aria-hidden>
+          {wallColumns.map((col, ci) => (
+            <div key={ci} className="relative h-full flex-1 overflow-hidden">
+              <div
+                className={clsx(
+                  "wall-track flex flex-col gap-[0.7vh]",
+                  ci === 1 && "wall-track-reverse",
+                )}
+                style={{ animationDuration: wallDurations[ci] }}
+              >
+                {col.map((p, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={`${p.id}-${i}`}
+                    src={p.assets[0]?.thumbUrl}
+                    alt=""
+                    className="aspect-[4/3] w-full shrink-0 rounded-[0.6vh] object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 前景を読ませるための覆い */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(14,11,13,0.62)_0%,rgba(14,11,13,0.94)_76%)]" />
+
+        <div
+          className="monitor-safe flex items-center gap-[3%]"
+          style={{ inset: safeInset }}
+        >
+          <div className="relative h-full w-[58%] overflow-hidden rounded-[1.4vh] bg-black/40 shadow-2xl">
+            {featuredAsset?.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={featuredAsset.id}
+                src={featuredAsset.url}
+                alt=""
+                className="size-full animate-pop-in object-cover"
+              />
+            ) : null}
+            <span
+              className="absolute rounded-full bg-primary font-semibold"
+              style={{ fontSize: "1.9vh", padding: "0.8vh 2vh", left: "2vh", top: "2vh" }}
+            >
+              新着
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1 animate-fade-up">
+            {settings.show_nickname ? (
+              <p className="font-mincho leading-tight" style={{ fontSize: "4.5vh" }}>
+                {current?.nickname_snapshot ?? ""}
+              </p>
+            ) : null}
+            {settings.show_comment && current?.comment ? (
+              <p
+                className="mt-3 text-white/88"
+                style={{ fontSize: "3.2vh", lineHeight: 1.45 }}
+              >
+                {current.comment}
+              </p>
+            ) : null}
+            <p
+              className="mt-6 font-mincho leading-none text-white/85"
+              style={{ fontSize: "5.6vh" }}
+            >
+              {clockText}
+            </p>
+            <p className="mt-2 text-white/45" style={{ fontSize: "1.9vh" }}>
+              {event?.title ?? ""}
+            </p>
+          </div>
+        </div>
+
+        {announce ? (
+          <div
+            className="absolute left-1/2 -translate-x-1/2"
+            style={{ top: "6.5vh" }}
+          >
+            <span
+              className="animate-fade-up inline-block rounded-full bg-primary font-semibold shadow-2xl"
+              style={{ fontSize: "2.6vh", padding: "1.4vh 3.4vh" }}
+            >
+              {announce}
+            </span>
+          </div>
+        ) : null}
       </div>
     );
   }

@@ -38,6 +38,8 @@ export default function AdminMonitorSettingsPage() {
         show_nickname: settings.show_nickname,
         show_comment: settings.show_comment,
         auto_play: settings.auto_play,
+        // display_mode 列がまだ無い環境では送らない（マイグレーション前でも壊れない）
+        ...(settings.display_mode ? { display_mode: settings.display_mode } : {}),
       });
       await repo.log({
         eventId: event.id,
@@ -134,6 +136,24 @@ export default function AdminMonitorSettingsPage() {
         <section>
           <SectionTitle title="表示項目" description="会場の雰囲気に合わせて調整" />
           <Card className="divide-y divide-line p-5">
+            <Field
+              label="ライブ表示のレイアウト"
+              hint="写真の壁：新着1枚を大きく見せながら、過去の写真が背景で流れ続けます"
+            >
+              <select
+                className="input"
+                value={settings.display_mode ?? "mosaic"}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    display_mode: e.target.value as MonitorSettingsRow["display_mode"],
+                  })
+                }
+              >
+                <option value="mosaic">写真の壁＋新着を大きく（推奨）</option>
+                <option value="slide">1枚ずつ切り替え（従来）</option>
+              </select>
+            </Field>
             <Toggle
               checked={settings.show_nickname}
               label="投稿者名を表示する"

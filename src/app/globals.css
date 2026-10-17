@@ -254,6 +254,42 @@ h3,
   animation: popIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ============================================================
+   写真の壁（モニターのライブ表示）
+   各列を半分だけ上（または下）へ動かし、継ぎ目なく循環させる。
+   列ごとに速度を変えて、全体が一枚板に見えないようにする。
+   ============================================================ */
+@keyframes wallDriftUp {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -50%, 0);
+  }
+}
+@keyframes wallDriftDown {
+  from {
+    transform: translate3d(0, -50%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+.wall-track {
+  animation-name: wallDriftUp;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+.wall-track-reverse {
+  animation-name: wallDriftDown;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wall-track {
+    animation: none;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

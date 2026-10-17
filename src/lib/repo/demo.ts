@@ -703,6 +703,7 @@ export class DemoRepo implements Repo {
       show_nickname: true,
       show_comment: true,
       auto_play: true,
+      display_mode: "mosaic",
       updated_at: now(),
     };
     db.settings.push(created);

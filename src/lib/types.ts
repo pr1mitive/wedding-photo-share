@@ -6,6 +6,8 @@
 export type EventStatus = "draft" | "open" | "closed" | "archived";
 export type PostStatus = "pending" | "approved" | "hidden" | "deleted";
 export type MonitorMode = "idle" | "large" | "background";
+/** ライブ表示のレイアウト。slide=1枚ずつ / mosaic=写真の壁＋新着を大きく */
+export type MonitorDisplayMode = "slide" | "mosaic";
 export type QueueKind = "large" | "background" | "zoom";
 export type QueueState = "queued" | "playing" | "done" | "skipped";
 export type AdminRole = "owner" | "operator" | "viewer";
@@ -110,6 +112,8 @@ export interface MonitorSettingsRow {
   show_nickname: boolean;
   show_comment: boolean;
   auto_play: boolean;
+  /** 未マイグレーション時は undefined。その場合は mosaic として扱う */
+  display_mode?: MonitorDisplayMode;
   updated_at: string;
 }
 
