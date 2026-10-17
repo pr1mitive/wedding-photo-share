@@ -204,23 +204,15 @@ export class SupabaseRepo implements Repo {
   }
 
   async createPost(input: CreatePostInput): Promise<PostWithDemoAssets> {
-    const postId = newId();
-    const { data: post, error: postError } = await this.sb
-      .from("posts")
-      .insert({
-        id: postId,
-        event_id: input.eventId,
-        guest_id: input.guestId,
-        nickname_snapshot: input.nickname,
-        comment: input.comment,
-        status: "pending",
-      })
-      .select("*")
-      .single();
-    if (postError) throw new Error(postError.message);
+    // ここで posts に行を作ってはいけない。
+    // 投稿の作成は create_guest_post（RPC）が行うため、両方で作ると
+    // 「画像なしの投稿」が1件余分に生まれる（実際にこの不具合が出た）。
+    //
+    // この UUID は Storage のフォルダ名にだけ使う。
+    const uploadFolder = newId();
 
     const event = await this.getEventById(input.eventId);
-    const keyFor = (i: number) => `${input.eventId}/${postId}/${i + 1}.jpg`;
+    const keyFor = (i: number) => `${input.eventId}/${uploadFolder}/${i + 1}.jpg`;
     const assets: Row[] = [];
 
     for (let i = 0; i < input.files.length; i += 1) {
