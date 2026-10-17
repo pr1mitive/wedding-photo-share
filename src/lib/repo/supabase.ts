@@ -227,35 +227,30 @@ export class SupabaseRepo implements Repo {
       const file = input.files[i];
       const key = keyFor(i);
 
+      // アップロード先は投稿ごとに新規UUIDで作るため、既存オブジェクトと
+      // 衝突しない。したがって upsert は使わない。
+      //
+      // upsert は「既存行との衝突判定」のために対象行を読む必要があり、
+      // 非公開の originals バケット（anon に SELECT 権限を与えていない）では
+      // RLS 違反になる。実測でも originals のみ 403 になった。
+      const put = async (bucket: string, body: Blob, contentType: string) => {
+        const { error } = await this.sb.storage
+          .from(bucket)
+          .upload(key, body, { contentType });
+        // 万一の再送で既に存在する場合は成功として扱う
+        if (error && !/already exists|duplicate/i.test(error.message)) {
+          throw new Error(error.message);
+        }
+      };
+
       // 原本：保管する設定のときだけ保存する（非公開バケット）
       if (event?.keep_originals) {
-        const source = file.dataUrl || file.display.dataUrl;
-        const { error } = await this.sb.storage
-          .from(ORIGINAL_BUCKET)
-          .upload(key, dataUrlToBlob(source), {
-            contentType: file.mime,
-            upsert: true,
-          });
-        if (error) throw new Error(error.message);
+        await put(ORIGINAL_BUCKET, dataUrlToBlob(file.dataUrl || file.display.dataUrl), file.mime);
       }
-
       // 表示用：アルバムとモニターが参照する（公開バケット）
-      const { error: displayError } = await this.sb.storage
-        .from(DISPLAY_BUCKET)
-        .upload(key, dataUrlToBlob(file.display.dataUrl), {
-          contentType: "image/jpeg",
-          upsert: true,
-        });
-      if (displayError) throw new Error(displayError.message);
-
+      await put(DISPLAY_BUCKET, dataUrlToBlob(file.display.dataUrl), "image/jpeg");
       // サムネイル：一覧グリッド用（公開バケット）
-      const { error: thumbError } = await this.sb.storage
-        .from(THUMB_BUCKET)
-        .upload(key, dataUrlToBlob(file.thumb.dataUrl), {
-          contentType: "image/jpeg",
-          upsert: true,
-        });
-      if (thumbError) throw new Error(thumbError.message);
+      await put(THUMB_BUCKET, dataUrlToBlob(file.thumb.dataUrl), "image/jpeg");
 
       assets.push({
         storage_path: event?.keep_originals ? key : "",
