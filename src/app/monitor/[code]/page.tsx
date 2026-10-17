@@ -30,9 +30,16 @@ export default function MonitorPage() {
   const [clock, setClock] = useState(new Date());
   /** 前景に大きく出す投稿（既定は最新。auto_play で新着に切り替わる） */
   const [featuredId, setFeaturedId] = useState<string | null>(null);
+  /** 前景表示を出し直すたびに変わり、表示時間のタイマーを張り直す */
+  const [featuredAt, setFeaturedAt] = useState(0);
   /** 新着投稿のお知らせ文言 */
   const [announce, setAnnounce] = useState<string | null>(null);
   const seenIdsRef = useRef<Set<string> | null>(null);
+  /** リハーサル用の上書き（?featured=5&layout=mosaic のように指定） */
+  const [overrides, setOverrides] = useState<{
+    featured: number | null;
+    layout: string | null;
+  }>({ featured: null, layout: null });
 
   /* 端末の登録とハートビート */
   const loadDevice = useCallback(async () => {
@@ -68,6 +75,16 @@ export default function MonitorPage() {
     if (device) void repo.heartbeat(device.id);
   }, 3000, Boolean(device));
 
+  /* URL の上書きを読み取る（投影テスト用。通常の運用では使わない） */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const f = Number(sp.get("featured"));
+    setOverrides({
+      featured: Number.isFinite(f) && f > 0 ? f : null,
+      layout: sp.get("layout"),
+    });
+  }, []);
+
   /* 時計 */
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 15000);
@@ -84,6 +101,7 @@ export default function MonitorPage() {
     if (seenIdsRef.current === null) {
       seenIdsRef.current = new Set(ids);
       setFeaturedId(ids[0] ?? null);
+      setFeaturedAt(Date.now());
       return;
     }
     const seen = seenIdsRef.current;
@@ -91,9 +109,22 @@ export default function MonitorPage() {
     ids.forEach((id) => seen.add(id));
     if (fresh.length === 0 || !settings?.auto_play) return;
     setFeaturedId(fresh[0]);
+    setFeaturedAt(Date.now());
     const posted = posts.find((p) => p.id === fresh[0]);
     setAnnounce(`${posted?.nickname_snapshot ?? "ゲスト"}さんが投稿しました`);
   }, [posts, settings?.auto_play]);
+
+  /* 前景の大きな表示は一定時間で閉じる。
+     閉じたあとは写真の壁だけが全面に流れる。 */
+  useEffect(() => {
+    if (!featuredId) return;
+    const seconds = Math.max(
+      overrides.featured ?? settings?.featured_seconds ?? 12,
+      1,
+    );
+    const timer = setTimeout(() => setFeaturedId(null), seconds * 1000);
+    return () => clearTimeout(timer);
+  }, [featuredId, featuredAt, settings?.featured_seconds, overrides.featured]);
 
   /* お知らせは数秒で消す */
   useEffect(() => {
@@ -126,8 +157,9 @@ export default function MonitorPage() {
 
   const currentPost = useMemo(() => {
     if (playing) return posts.find((p) => p.id === playing.post_id) ?? null;
-    if (featuredId) return posts.find((p) => p.id === featuredId) ?? posts[0] ?? null;
-    return posts[0] ?? null;
+    if (featuredId) return posts.find((p) => p.id === featuredId) ?? null;
+    // 前景表示が閉じたあとは写真の壁だけになるため、ここでは何も返さない
+    return null;
   }, [playing, posts, featuredId]);
 
   /* 表示モードの決定。
@@ -140,11 +172,11 @@ export default function MonitorPage() {
     if (playing) return "large";
     if (!device) return "idle";
     if (device.mode === "idle") return "idle";
-    const displayMode = settings?.display_mode ?? "mosaic";
+    const displayMode = overrides.layout ?? settings?.display_mode ?? "mosaic";
     if (displayMode === "mosaic" && posts.length >= 4) return "mosaic";
     if (device.mode === "large" && posts[0]) return "large";
     return "background";
-  }, [playing, device, posts, settings?.display_mode]);
+  }, [playing, device, posts, settings?.display_mode, overrides.layout]);
 
   if (!device || !settings) {
     return (
@@ -185,6 +217,10 @@ export default function MonitorPage() {
             mode,
             postsN: posts.length,
             displayMode: settings?.display_mode ?? "(undefined→mosaic)",
+            featuredId: featuredId ?? null,
+            featuredSec: overrides.featured ?? settings?.featured_seconds ?? "(undefined→12)",
+            wallTileVh: settings?.wall_tile_vh ?? "(undefined→30)",
+            wallSpeed: settings?.wall_speed_seconds ?? "(undefined→180)",
             deviceMode: device?.mode ?? null,
             playingId: playing?.id ?? null,
             queueN: queue.length,

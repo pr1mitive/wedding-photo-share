@@ -704,6 +704,9 @@ export class DemoRepo implements Repo {
       show_comment: true,
       auto_play: true,
       display_mode: "mosaic",
+      featured_seconds: 12,
+      wall_tile_vh: 30,
+      wall_speed_seconds: 180,
       updated_at: now(),
     };
     db.settings.push(created);

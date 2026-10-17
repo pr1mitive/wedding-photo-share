@@ -37,6 +37,9 @@ export function MonitorStage({
     show_comment: boolean;
     safe_area_percent: number;
     background_seconds: number;
+    featured_seconds?: number;
+    wall_tile_vh?: number;
+    wall_speed_seconds?: number;
   };
   clock: Date;
 }) {
@@ -81,7 +84,15 @@ export function MonitorStage({
     });
   }, [wallPool, current?.id]);
 
-  const wallDurations = ["180s", "225s", "150s"];
+  // 流れる速さは管理画面の設定から決める。列ごとに少し変えて、
+  // 全体が一枚板に見えないようにする。
+  const wallBase = Math.max(settings.wall_speed_seconds ?? 180, 30);
+  const wallDurations = [
+    `${wallBase}s`,
+    `${Math.round(wallBase * 1.25)}s`,
+    `${Math.round(wallBase * 0.83)}s`,
+  ];
+  const wallTileVh = settings.wall_tile_vh ?? 30;
 
   const clockText = `${String(clock.getHours()).padStart(2, "0")}:${String(
     clock.getMinutes(),
@@ -219,38 +230,83 @@ export function MonitorStage({
     );
   }
 
-  /* ---- ライブ表示：新着1枚を大きく＋過去の写真が背景で流れ続ける ---- */
+  /* ---- ライブ表示：写真の壁。新着がある間だけ前景に大きく出す ---- */
   if (mode === "mosaic") {
     const featuredAsset = current?.assets[0];
+
+    const wall = (
+      <div className="absolute inset-0 flex gap-[0.5%]" aria-hidden>
+        {wallColumns.map((col, ci) => (
+          <div key={ci} className="relative h-full flex-1 overflow-hidden">
+            <div
+              className={clsx(
+                "wall-track flex flex-col gap-[0.7vh]",
+                ci === 1 && "wall-track-reverse",
+              )}
+              style={{ animationDuration: wallDurations[ci] }}
+            >
+              {col.map((p, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${p.id}-${i}`}
+                  src={p.assets[0]?.thumbUrl}
+                  alt=""
+                  className="w-full shrink-0 rounded-[0.6vh] object-cover"
+                  style={{ height: `${wallTileVh}vh` }}
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
+    const announceBadge = announce ? (
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "6.5vh" }}>
+        <span
+          className="animate-fade-up inline-block rounded-full bg-primary font-semibold shadow-2xl"
+          style={{ fontSize: "2.6vh", padding: "1.4vh 3.4vh" }}
+        >
+          {announce}
+        </span>
+      </div>
+    ) : null;
+
+    /* 新着なし：壁だけを全面に流す（大きな表示は一定時間で閉じる） */
+    if (!featuredAsset) {
+      return (
+        <div className="monitor-root">
+          {wall}
+          {/* 全面の壁は明るく騒がしくなるため、薄く落として
+             時計とイベント名を読めるようにする */}
+          <div className="absolute inset-0 bg-black/28" />
+          <div className="absolute inset-x-0 bottom-0 h-[36vh] bg-gradient-to-t from-black/90 to-transparent" />
+
+          <div
+            className="monitor-safe flex items-end justify-between"
+            style={{ inset: safeInset }}
+          >
+            <p className="font-mincho text-white/75" style={{ fontSize: "2.6vh" }}>
+              {event?.title ?? ""}
+            </p>
+            <p
+              className="font-mincho leading-none text-white/90"
+              style={{ fontSize: "5.6vh" }}
+            >
+              {clockText}
+            </p>
+          </div>
+
+          {announceBadge}
+        </div>
+      );
+    }
+
+    /* 新着あり：壁を暗く落として、前景に大きく見せる */
     return (
       <div className="monitor-root">
-        {/* 背景：過去写真の壁。列ごとに速度と向きを変えて流し続ける */}
-        <div className="absolute inset-0 flex gap-[0.5%] opacity-[0.40]" aria-hidden>
-          {wallColumns.map((col, ci) => (
-            <div key={ci} className="relative h-full flex-1 overflow-hidden">
-              <div
-                className={clsx(
-                  "wall-track flex flex-col gap-[0.7vh]",
-                  ci === 1 && "wall-track-reverse",
-                )}
-                style={{ animationDuration: wallDurations[ci] }}
-              >
-                {col.map((p, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${p.id}-${i}`}
-                    src={p.assets[0]?.thumbUrl}
-                    alt=""
-                    className="aspect-[4/3] w-full shrink-0 rounded-[0.6vh] object-cover"
-                    loading="lazy"
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 前景を読ませるための覆い */}
+        <div className="opacity-[0.40]">{wall}</div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(14,11,13,0.62)_0%,rgba(14,11,13,0.94)_76%)]" />
 
         <div
@@ -258,15 +314,13 @@ export function MonitorStage({
           style={{ inset: safeInset }}
         >
           <div className="relative h-full w-[58%] overflow-hidden rounded-[1.4vh] bg-black/40 shadow-2xl">
-            {featuredAsset?.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={featuredAsset.id}
-                src={featuredAsset.url}
-                alt=""
-                className="size-full animate-pop-in object-cover"
-              />
-            ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              key={featuredAsset.id}
+              src={featuredAsset.url}
+              alt=""
+              className="size-full animate-pop-in object-cover"
+            />
             <span
               className="absolute rounded-full bg-primary font-semibold"
               style={{ fontSize: "1.9vh", padding: "0.8vh 2vh", left: "2vh", top: "2vh" }}
@@ -301,19 +355,7 @@ export function MonitorStage({
           </div>
         </div>
 
-        {announce ? (
-          <div
-            className="absolute left-1/2 -translate-x-1/2"
-            style={{ top: "6.5vh" }}
-          >
-            <span
-              className="animate-fade-up inline-block rounded-full bg-primary font-semibold shadow-2xl"
-              style={{ fontSize: "2.6vh", padding: "1.4vh 3.4vh" }}
-            >
-              {announce}
-            </span>
-          </div>
-        ) : null}
+        {announceBadge}
       </div>
     );
   }

@@ -114,6 +114,12 @@ export interface MonitorSettingsRow {
   auto_play: boolean;
   /** 未マイグレーション時は undefined。その場合は mosaic として扱う */
   display_mode?: MonitorDisplayMode;
+  /** 新着を前景に大きく出す秒数 */
+  featured_seconds?: number;
+  /** 写真の壁：タイル1枚の高さ（vh） */
+  wall_tile_vh?: number;
+  /** 写真の壁：流れ1周にかける秒数（大きいほどゆっくり） */
+  wall_speed_seconds?: number;
   updated_at: string;
 }
 

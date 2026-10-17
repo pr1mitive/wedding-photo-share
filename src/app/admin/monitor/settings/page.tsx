@@ -31,16 +31,23 @@ export default function AdminMonitorSettingsPage() {
     if (!settings || !event) return;
     setBusy(true);
     try {
-      await repo.updateMonitorSettings(event.id, {
+      const patch: Partial<MonitorSettingsRow> = {
         large_seconds: settings.large_seconds,
         background_seconds: settings.background_seconds,
         safe_area_percent: settings.safe_area_percent,
         show_nickname: settings.show_nickname,
         show_comment: settings.show_comment,
         auto_play: settings.auto_play,
-        // display_mode 列がまだ無い環境では送らない（マイグレーション前でも壊れない）
-        ...(settings.display_mode ? { display_mode: settings.display_mode } : {}),
-      });
+      };
+      // 後から追加した列は、マイグレーション前の環境では送らない
+      if (settings.display_mode) patch.display_mode = settings.display_mode;
+      if (settings.featured_seconds !== undefined)
+        patch.featured_seconds = settings.featured_seconds;
+      if (settings.wall_tile_vh !== undefined)
+        patch.wall_tile_vh = settings.wall_tile_vh;
+      if (settings.wall_speed_seconds !== undefined)
+        patch.wall_speed_seconds = settings.wall_speed_seconds;
+      await repo.updateMonitorSettings(event.id, patch);
       await repo.log({
         eventId: event.id,
         actorType: "admin",
@@ -83,7 +90,7 @@ export default function AdminMonitorSettingsPage() {
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
-          <SectionTitle title="表示時間" description="1枚あたりの表示秒数" />
+          <SectionTitle title="表示時間・ライブ表示" description="1枚あたりの秒数と、写真の壁の見え方" />
           <Card className="space-y-5 p-5">
             <Field
               label={`大型表示の表示時間：${settings.large_seconds}秒`}
@@ -112,6 +119,52 @@ export default function AdminMonitorSettingsPage() {
                 className="w-full accent-[#9C2B4E]"
                 onChange={(e) =>
                   setSettings({ ...settings, background_seconds: Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field
+              label={`新着を大きく表示する時間：${settings.featured_seconds ?? 12}秒`}
+              hint="この時間が過ぎると大きな表示は閉じ、写真の壁だけが流れます"
+            >
+              <input
+                type="range"
+                min={5}
+                max={60}
+                value={settings.featured_seconds ?? 12}
+                className="w-full accent-[#9C2B4E]"
+                onChange={(e) =>
+                  setSettings({ ...settings, featured_seconds: Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field
+              label={`背景の写真1枚の大きさ：${settings.wall_tile_vh ?? 30}（画面高さの%）`}
+              hint="大きくすると写真が目立ち、小さくすると一度に多くの写真が並びます"
+            >
+              <input
+                type="range"
+                min={16}
+                max={60}
+                value={settings.wall_tile_vh ?? 30}
+                className="w-full accent-[#9C2B4E]"
+                onChange={(e) =>
+                  setSettings({ ...settings, wall_tile_vh: Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field
+              label={`背景が流れる速さ：${settings.wall_speed_seconds ?? 180}秒で1周`}
+              hint="数字が大きいほどゆっくり流れます（60〜600秒）"
+            >
+              <input
+                type="range"
+                min={60}
+                max={600}
+                step={10}
+                value={settings.wall_speed_seconds ?? 180}
+                className="w-full accent-[#9C2B4E]"
+                onChange={(e) =>
+                  setSettings({ ...settings, wall_speed_seconds: Number(e.target.value) })
                 }
               />
             </Field>

@@ -520,9 +520,14 @@ export class SupabaseRepo implements Repo {
     patch: Partial<MonitorSettingsRow>,
   ): Promise<MonitorSettingsRow> {
     const current = await this.getMonitorSettings(eventId);
+    // 追加した列がまだ無い環境では undefined が混ざる。
+    // そのまま送ると PostgREST がエラーにするため取り除く。
+    const clean = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== undefined),
+    );
     const { data, error } = await this.sb
       .from("monitor_settings")
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update({ ...clean, updated_at: new Date().toISOString() })
       .eq("id", current.id)
       .select("*")
       .single();
