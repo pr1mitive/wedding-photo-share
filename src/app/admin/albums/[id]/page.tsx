@@ -145,10 +145,34 @@ export default function AdminAlbumEditPage() {
           <Card className="mt-4 p-4">
             <p className="text-[0.8125rem] font-semibold text-ink">共有リンク</p>
             <p className="mt-2 break-all rounded-[8px] bg-surface px-3 py-2 font-mono text-[0.75rem] text-muted">
-              /album/{album.share_token}
+              {typeof window === "undefined"
+                ? `/album/${album.share_token}`
+                : `${window.location.origin}/album/${album.share_token}`}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-outline min-h-[40px] px-3 text-[0.8125rem]"
+                onClick={() => {
+                  void navigator.clipboard
+                    ?.writeText(`${window.location.origin}/album/${album.share_token}`)
+                    .then(() => show("共有リンクをコピーしました", "success"));
+                }}
+              >
+                リンクをコピー
+              </button>
+              <a
+                href={`/album/${album.share_token}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-outline min-h-[40px] px-3 text-[0.8125rem]"
+              >
+                別タブで開く
+              </a>
+            </div>
             <p className="hint mt-2">
               公開範囲が「参加者のみ」「公開リンク」のときだけ有効です。
+              「非公開（下書き）」のままだと、このリンクは開けません。
             </p>
           </Card>
         </section>
