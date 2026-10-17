@@ -1,0 +1,261 @@
+@import "tailwindcss";
+
+/* ============================================================
+   デザイントークン（要件定義書 / 画面デザイン案 S-00 と同一）
+   Tailwind 4 の @theme に流し込むことで
+   bg-primary / text-ink / font-serif 等のユーティリティが生成される。
+   ============================================================ */
+@theme {
+  --color-primary: #9c2b4e;
+  --color-primary-dark: #6e1e38;
+  --color-primary-soft: #f8eef2;
+  --color-wine: #38182a;
+  --color-ink: #1b1a1a;
+  --color-muted: #7d7773;
+  --color-surface: #faf7f5;
+  --color-line: #e4dfdb;
+  --color-success: #2f7a55;
+  --color-warning: #b8860b;
+  --color-danger: #b3261e;
+  --color-monitor: #0e0b0d;
+
+  --font-sans: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic",
+    "Noto Sans JP", Meiryo, system-ui, sans-serif;
+  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP",
+    "Hiragino Mincho Pro", serif;
+
+  --radius-card: 14px;
+  --radius-pill: 999px;
+}
+
+/* ============================================================
+   ベース
+   ============================================================ */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* 本文16px下限（要件：アクセシビリティ） */
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-mincho {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   共通部品（S-00 で定義したコンポーネント）
+   ============================================================ */
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    /* タップ領域48px以上を全画面で保証 */
+    min-height: 48px;
+    padding: 0 1.25rem;
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+    font-size: 1rem;
+    border: 1px solid transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+      opacity 0.15s ease;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+  }
+
+  .btn-outline {
+    background: #fff;
+    border-color: var(--color-line);
+    color: var(--color-ink);
+  }
+  .btn-outline:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--color-primary);
+  }
+
+  .btn-danger {
+    background: #fff;
+    border-color: #eccbc8;
+    color: var(--color-danger);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: #fdf4f3;
+  }
+
+  .input {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--color-ink);
+    font-size: 1rem;
+    font-family: inherit;
+  }
+  .input::placeholder {
+    color: #b3ada9;
+  }
+  .input:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  .label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--color-line);
+    background: #fff;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .chip-primary {
+    background: var(--color-primary-soft);
+    border-color: #ecd4dd;
+    color: var(--color-primary-dark);
+  }
+  .chip-success {
+    background: #eef6f1;
+    border-color: #cfe4d8;
+    color: var(--color-success);
+  }
+  .chip-warning {
+    background: #fbf4e4;
+    border-color: #eddcb4;
+    color: #8a6508;
+  }
+  .chip-danger {
+    background: #fdf4f3;
+    border-color: #eccbc8;
+    color: var(--color-danger);
+  }
+
+  .hint {
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+    line-height: 1.6;
+  }
+}
+
+/* ============================================================
+   モニター（1920x1080 / 会場スクリーン）
+   px を一切使わず vh・% のみで構成する。
+   解像度・アスペクト比が当日まで確定しない機材差を吸収するため。
+   ============================================================ */
+.monitor-root {
+  position: fixed;
+  inset: 0;
+  background: var(--color-monitor);
+  color: #fff;
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+/* 上下左右5%セーフエリア */
+.monitor-safe {
+  position: absolute;
+  inset: 5%;
+}
+
+@keyframes kenburns {
+  0% {
+    transform: scale(1.06) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.16) translate3d(-1.2%, -1.6%, 0);
+  }
+}
+.animate-kenburns {
+  animation: kenburns 8s ease-out forwards;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(2.2vh);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fadeUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-pop-in {
+  animation: popIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
