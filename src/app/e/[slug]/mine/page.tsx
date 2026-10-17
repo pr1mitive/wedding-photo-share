@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { GuestHeading, GuestShell } from "@/components/guest-shell";
-import { Card, EmptyState, Loading, StatusChip, Toast, useToast } from "@/components/ui";
+import { Card, EmptyState, ErrorCard, Loading, StatusChip, Toast, useToast } from "@/components/ui";
 import { formatDateTime, formatBytes } from "@/lib/format";
 import { useAsync, useEvent, useGuestSession, useRepo } from "@/lib/hooks";
 import type { PostWithDemoAssets } from "@/lib/types";
@@ -13,19 +13,22 @@ export default function GuestMinePage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug;
   const repo = useRepo();
-  const { event } = useEvent(slug);
+  const { event, loading: eventLoading } = useEvent(slug);
   const { session, ready } = useGuestSession(slug);
   const { toast, show } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const loader = useCallback(async () => {
     if (!event || !session) return [];
-    return repo.listPosts(event.id, { deviceToken: session.deviceToken });
+    const rows = await repo.listPosts(event.id, { deviceToken: session.deviceToken });
+    // 画像を持たない投稿は表示しない。
+    // （過去の二重登録で生まれた「白紙の投稿」を画面から排除する）
+    return rows.filter((p) => p.assets.length > 0);
   }, [repo, event, session]);
 
-  const { data: posts, loading, reload } = useAsync<PostWithDemoAssets[]>(
+  const { data: posts, loading, error, reload } = useAsync<PostWithDemoAssets[]>(
     loader,
-    [event?.id, session?.guestId],
+    [event?.id, session?.deviceToken],
     [],
   );
 
@@ -58,7 +61,14 @@ export default function GuestMinePage() {
     }
   }
 
-  if (!ready || loading) return <Loading />;
+  if (!ready || loading || eventLoading) return <Loading />;
+  if (error) {
+    return (
+      <GuestShell event={event} slug={slug!} nickname={session?.nickname} title="自分の投稿">
+        <ErrorCard title="投稿を読み込めませんでした" message={error} onRetry={reload} />
+      </GuestShell>
+    );
+  }
 
   const totalBytes = posts.reduce(
     (sum, p) => sum + p.assets.reduce((s, a) => s + a.bytes, 0),
@@ -80,7 +90,7 @@ export default function GuestMinePage() {
       ) : posts.length === 0 ? (
         <EmptyState
           title="まだ投稿がありません"
-          description="「投稿」タブから最初の1枚を共有しましょう。"
+          description="「投稿」タブから最初の1枚を共有しましょう。同じ端末であれば、投稿した写真がここに並びます。"
         />
       ) : (
         <ul className="space-y-4">

@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { GuestHeading, GuestShell } from "@/components/guest-shell";
-import { Card, EmptyState, Loading } from "@/components/ui";
+import { Card, EmptyState, ErrorCard, Loading } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { useAsync, useEvent, useGuestSession, useRealtime, useRepo } from "@/lib/hooks";
 import type { AlbumItemRow, PostWithDemoAssets } from "@/lib/types";
@@ -13,17 +13,19 @@ export default function GuestAlbumPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug;
   const repo = useRepo();
-  const { event } = useEvent(slug);
+  const { event, loading: eventLoading } = useEvent(slug);
   const { session } = useGuestSession(slug);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [onlyMine, setOnlyMine] = useState(false);
 
   const loader = useCallback(async () => {
     if (!event) return [] as PostWithDemoAssets[];
-    return repo.listPosts(event.id, { statuses: ["approved"] });
+    const rows = await repo.listPosts(event.id, { statuses: ["approved"] });
+    // 画像を持たない投稿はアルバムに載せない
+    return rows.filter((p) => p.assets.length > 0);
   }, [repo, event]);
 
-  const { data: posts, loading, reload } = useAsync<PostWithDemoAssets[]>(
+  const { data: posts, loading, error, reload } = useAsync<PostWithDemoAssets[]>(
     loader,
     [event?.id],
     [],
@@ -52,7 +54,15 @@ export default function GuestAlbumPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [openIndex, flat.length]);
 
-  if (loading) return <Loading />;
+  // イベントの読み込みが終わるまで空状態を出さない
+  if (loading || eventLoading) return <Loading />;
+  if (error) {
+    return (
+      <GuestShell event={event} slug={slug!} nickname={session?.nickname} title="アルバム">
+        <ErrorCard title="アルバムを読み込めませんでした" message={error} onRetry={reload} />
+      </GuestShell>
+    );
+  }
 
   const current = openIndex === null ? null : flat[openIndex];
 

@@ -291,17 +291,44 @@ export class SupabaseRepo implements Repo {
       return options.limit ? list.slice(0, options.limit) : list;
     }
 
+    // PostgREST の埋め込み（select=*,post_assets(*)）は使わない。
+    // 埋め込みが失敗しても原因が画面に出ず「写真がありません」と
+    // 誤表示されるため、投稿と画像を別々に取得して結合する。
+    // 副次的な利点として、アルバムでは画像を1回のクエリでまとめて取れる。
     let query = this.sb
       .from("posts")
-      .select("*, post_assets(*)")
+      .select("*")
       .eq("event_id", eventId)
       .order("posted_at", { ascending: false });
     if (options?.statuses?.length) query = query.in("status", options.statuses);
     if (options?.guestId) query = query.eq("guest_id", options.guestId);
     if (options?.limit) query = query.limit(options.limit);
+
     const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return ((data as Row[]) ?? []).map(mapPost);
+    if (error) throw new Error(`投稿の取得に失敗しました: ${error.message}`);
+
+    const rows = (data as Row[] | null) ?? [];
+    if (rows.length === 0) return [];
+
+    const ids = rows.map((r) => String(r.id));
+    const { data: assetRows, error: assetError } = await this.sb
+      .from("post_assets")
+      .select("*")
+      .in("post_id", ids)
+      .order("sort_order", { ascending: true });
+    if (assetError) {
+      throw new Error(`画像情報の取得に失敗しました: ${assetError.message}`);
+    }
+
+    const byPost = new Map<string, Row[]>();
+    for (const a of (assetRows as Row[] | null) ?? []) {
+      const key = String(a.post_id);
+      const list = byPost.get(key);
+      if (list) list.push(a);
+      else byPost.set(key, [a]);
+    }
+
+    return rows.map((r) => mapPost({ ...r, post_assets: byPost.get(String(r.id)) ?? [] }));
   }
 
   async getPost(postId: string): Promise<PostWithDemoAssets | null> {

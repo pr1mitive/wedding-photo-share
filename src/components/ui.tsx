@@ -195,6 +195,36 @@ export function useToast(duration = 2600) {
   };
 }
 
+/** 読み込み失敗を黙って隠さず、原因をそのまま画面に出す */
+export function ErrorCard({
+  title = "読み込みに失敗しました",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message?: string | null;
+  onRetry?: () => void;
+}) {
+  return (
+    <Card className="border-danger/40 bg-[#fdf4f3] p-5">
+      <p className="font-mincho text-[1.0625rem] text-danger">{title}</p>
+      {message ? (
+        <p className="mt-2 break-words rounded-[8px] bg-white p-3 font-mono text-[0.75rem] leading-relaxed text-ink">
+          {message}
+        </p>
+      ) : null}
+      <p className="hint mt-3">
+        通信状況をご確認のうえ、もう一度お試しください。
+      </p>
+      {onRetry ? (
+        <button type="button" className="btn btn-outline mt-4 w-full" onClick={onRetry}>
+          再読み込み
+        </button>
+      ) : null}
+    </Card>
+  );
+}
+
 export function Loading({ label = "読み込み中…" }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-3 py-16 text-muted">
